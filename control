@@ -1,0 +1,9 @@
+Package: com.filterkit.probe
+Name: FilterKitProbe
+Version: 1.0
+Architecture: iphoneos-arm64
+Description: FilterKit 技术信息采集工具
+Maintainer: yifen <https://yfen.cn>
+Author: yifen
+Section: Utilities
+Depends: firmware (>= 15.0)
