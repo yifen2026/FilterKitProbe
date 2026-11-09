@@ -1,0 +1,69 @@
+name: FilterKitProbe Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_scheme:
+        description: '选择 deb 打包环境'
+        required: true
+        default: roothide
+        type: choice
+        options: [roothide, rootless, rootful]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: filterkit-probe-manual-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: FilterKitProbe 1.0 (${{ inputs.package_scheme }})
+    runs-on: macos-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Install build dependencies
+        run: brew install ldid dpkg
+
+      - name: Install Theos and iOS SDKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export THEOS="$RUNNER_TEMP/theos"
+          git clone --depth 1 --recursive https://github.com/roothide/theos.git "$THEOS"
+          rm -rf "$THEOS/sdks"
+          git clone --depth 1 https://github.com/theos/sdks.git "$THEOS/sdks"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          echo "$THEOS/bin" >> "$GITHUB_PATH"
+
+      - name: Build package
+        shell: bash
+        env:
+          PACKAGE_SCHEME: ${{ inputs.package_scheme }}
+        run: |
+          set -euo pipefail
+          mkdir -p build-artifacts
+
+          make clean
+          if [ "$PACKAGE_SCHEME" = "rootful" ]; then
+            make package
+          else
+            THEOS_PACKAGE_SCHEME="$PACKAGE_SCHEME" make package
+          fi
+
+          deb="$(ls -t packages/*.deb | head -n 1)"
+          test -f "$deb"
+          cp "$deb" "build-artifacts/FilterKitProbe-1.0-${PACKAGE_SCHEME}.deb"
+
+          test "$(find build-artifacts -maxdepth 1 -type f -name '*.deb' | wc -l | tr -d ' ')" -ge 1
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v5
+        with:
+          name: FilterKitProbe-1.0-${{ inputs.package_scheme }}
+          path: build-artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 14
